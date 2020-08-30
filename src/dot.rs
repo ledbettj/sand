@@ -6,7 +6,7 @@ pub enum Dot {
   Empty { temp: i16 },
   Sand { temp: i16 },
   Dirt { temp: i16 },
-  Water { temp: i16, salinity: u8 },
+  Water { temp: i16, salinity: u16 },
   Salt { temp: i16 },
   Iron { temp: i16 }
 }
@@ -44,7 +44,6 @@ impl Dot {
     }
   }
 
-
   pub fn is_displaceable(&self) -> bool {
     match self {
       Dot::Empty { temp: _ } | Dot::Water { temp: _, salinity: _ } => true,
@@ -80,7 +79,7 @@ impl Dot {
       Dot::Empty { temp: _ } => [0x00, 0x00, 0x00, 0xFF],
       Dot::Sand { temp: _ }  => [0xED, 0xC9, 0xAF, 0xFF],
       Dot::Dirt { temp: _ }  => [0xBD, 0x99, 0xCF, 0xFF],
-      Dot::Water { temp: _, salinity: _ } => [0x00, 0x40, 0xFF, 0xFF],
+      Dot::Water { temp: _, salinity: s } => [0x00, 0xFF - (*s as u8), 0xFF, 0xFF],
       Dot::Salt { temp: _ }  => [0xFF, 0xFF, 0xFF, 0xFF],
       Dot::Iron { temp: _ }  => [0xCC, 0xCC, 0xCC, 0xFF]
     };

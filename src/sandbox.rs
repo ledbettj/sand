@@ -1,8 +1,12 @@
-use crate::dot::Dot;
 use std::time::Duration;
 
+use crate::dot::Dot;
+
+use rand::prelude::*;
+
 pub struct Sandbox {
-  dots: Vec<Vec<Dot>>
+  dots: Vec<Vec<Dot>>,
+  rng: ThreadRng,
 }
 
 impl Sandbox {
@@ -13,7 +17,7 @@ impl Sandbox {
       dots.push((0..w).map(|_| Dot::default()).collect());
     }
 
-    Sandbox { dots }
+    Sandbox { dots, rng: rand::thread_rng() }
   }
 
   pub fn width(&self) -> usize {
@@ -38,12 +42,12 @@ impl Sandbox {
     }
   }
 
-  fn fall_neighbors(pos: (isize, isize)) -> Vec<(isize, isize)> {
+  fn fall_neighbors(&mut self, pos: (isize, isize)) -> Vec<(isize, isize)> {
     let mut result = Vec::with_capacity(5);
 
     result.push((pos.0, pos.1 + 1));
 
-    if rand::random() {
+    if self.rng.gen() {
       result.push((pos.0 - 1, pos.1 + 1));
       result.push((pos.0 + 1, pos.1 + 1));
     } else {
@@ -53,10 +57,10 @@ impl Sandbox {
     result
   }
 
-  fn flow_neighbors(pos: (isize, isize)) -> Vec<(isize, isize)> {
+  fn flow_neighbors(&mut self, pos: (isize, isize)) -> Vec<(isize, isize)> {
     let mut result = Vec::with_capacity(5);
 
-    if rand::random() {
+    if self.rng.gen() {
       result.push((pos.0 - 1, pos.1));
       result.push((pos.0 + 1, pos.1));
     } else {
@@ -66,9 +70,65 @@ impl Sandbox {
     result
   }
 
+  fn neighbors(&mut self, pos: (usize, usize)) -> Vec<(usize, usize)> {
+    let offsets = [(0, 1), (1, 1), (1, 0), (0, -1), (-1, -1), (-1, 0)];
+    let w = self.width() as isize;
+    let h = self.height() as isize;
+    let mut results = offsets
+      .iter()
+      .flat_map(|(ox, oy)|{
+        let x = pos.0 as isize + ox;
+        let y = pos.1 as isize + oy;
 
-  pub fn step(&mut self, _dt: &Duration) {
-    let mut horiz : Vec<(isize, isize)> = Vec::new();
+        if x < 0 || y < 0 || x >= w || y >= h {
+          None
+        } else {
+          Some((x as usize, y as usize))
+        }
+
+      }).collect::<Vec<(usize, usize)>>();
+
+    results.shuffle(&mut self.rng);
+    results
+  }
+
+  pub fn step(&mut self, dt: &Duration) {
+    self.step_attrs(dt);
+    self.step_fall(dt);
+  }
+
+  pub fn step_attrs(&mut self, _dt: &Duration) {
+    for y in 0..self.height() {
+      for x in 0..self.width() {
+        let dot = self.dots[y][x];
+
+        for (nx, ny) in self.neighbors((x, y)) {
+          let n = &mut self.dots[ny][nx];
+
+          match (dot, n) {
+            (Dot::Salt { temp: st }, Dot::Water { temp: _, salinity: sal }) => {
+              if *sal <= 100 {
+                *sal += 100;
+                self.dots[y][x] = Dot::Empty { temp: st }
+              }
+            },
+            (Dot::Water { temp: t, salinity: s1 }, Dot::Water { temp: _, salinity: s2 }) => {
+              let s = (s1 + *s2) / 2;
+              if s != 0 {
+                *s2 = s;
+                self.dots[y][x] = Dot::Water { temp: t, salinity: s };
+              }
+            },
+            _ => {}
+
+          }
+        }
+      }
+    }
+  }
+
+  pub fn step_fall(&mut self, _dt: &Duration) {
+    let mut horiz : Vec<(isize, isize)> = Vec::with_capacity(self.width());
 
     for y in (0..self.height() as isize).rev() {
       for x in 0..self.width() as isize {
@@ -78,7 +138,7 @@ impl Sandbox {
           continue;
         }
 
-        let opts = Sandbox::fall_neighbors((x, y));
+        let opts = self.fall_neighbors((x, y));
 
         for (nx, ny) in opts {
           if nx < 0 || ny < 0 {
@@ -103,7 +163,7 @@ impl Sandbox {
 
       // process horizontal movement
       for &(px, py) in &horiz {
-        let opts = Sandbox::flow_neighbors((px, py));
+        let opts = self.flow_neighbors((px, py));
         let dot = self.dots[py as usize][px as usize];
 
         for (nx, ny) in opts {
