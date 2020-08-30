@@ -37,6 +37,7 @@ fn main() -> Result<(), Error> {
     Pixels::new(WIDTH, HEIGHT, texture)?
   };
 
+  let mut paused = false;
   let mut time = Instant::now();
   event_loop.run(move |event, _, cf| {
     if let Event::RedrawRequested(_) = &event {
@@ -52,6 +53,9 @@ fn main() -> Result<(), Error> {
       if input.key_pressed(VirtualKeyCode::Escape) || input.quit() {
         *cf = ControlFlow::Exit;
         return;
+      }
+      if input.key_pressed(VirtualKeyCode::Space) {
+        paused = !paused;
       }
 
       let (mouse_cell, mouse_prev_cell) = input
@@ -89,7 +93,9 @@ fn main() -> Result<(), Error> {
       let now = Instant::now();
       let dt = now.duration_since(time);
       time = now;
-      sandbox.step(&dt);
+      if !paused {
+        sandbox.step(&dt);
+      }
       window.request_redraw();
     }
   });
